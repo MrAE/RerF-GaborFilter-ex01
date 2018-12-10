@@ -1,0 +1,233 @@
+---
+title: "Plot Gabor filters with varying parameters."
+author: "Jesse Leigh Patsolic"
+output: 
+  html_document:
+    keep_md: true
+    toc: true
+    code_folding: show
+    self_contained: true
+---
+
+<!--
+### ### INITIAL COMMENTS HERE ###
+###
+### Jesse Leigh Patsolic 
+### 2018 <jpatsolic@jhu.edu>
+### S.D.G 
+#
+-->
+
+```{r render-code, eval=FALSE, echo=FALSE}
+set.seed(3171)
+require(rmarkdown)
+require(knitr)
+knitr::opts_chunk$set(cache=FALSE, autodep=TRUE, eval = TRUE)
+
+rmarkdown::render("PlotGabor.Rmd")
+system('open PlotGabor.html')
+```
+
+<style type="text/css">
+.table {
+    width: 40%;
+}
+tr:hover {background-color:#f5f5f5;}
+</style>
+
+```{r setup}
+require(rmarkdown)
+require(devtools)
+require(raster)
+require(ggplot2)
+require(MCMCpack)
+require(rerf)
+require(data.table)
+require(gridExtra)
+require(rgl)
+data(mnist)
+source('RandMatGabor.R')
+```
+
+# Introduction 
+
+The Gabor filter as defined by Goodfellow et al. is given by 
+$$ w(x,y; \alpha, \beta_x, \beta_y, f, \phi, x_0, y_0, \tau) = \alpha
+\exp{(- \beta_x x'^2 - \beta_y y'^2 \color{red}{+ \beta_{xy}x'y'})} \cos{(fx' + \phi)} $$
+
+the term in red is required if the correlation is non-zero, however
+this term is missing from the definition in Goodfellow et al.
+
+For reference the bivariate Gaussian is given by 
+
+$$ f(x,y; \mu_x, \mu_y, \sigma_x, \sigma_y, \rho) = \frac{1}{2\pi\sigma_x\sigma_y(1 - \rho^2)}\exp{\left\{-\frac{1}{2(1 - \rho^2)}\left[\frac{(x - \mu_x)^2}{\sigma_x^2} \color{blue}{- \frac{2\rho(x - \mu_x)(y - \mu_y)}{\sigma_x\sigma_y}}+ \frac{(y - \mu_y)^2}{\sigma_y^2} \right]\right\}} $$
+
+**The conjugate prior for a uni-variate normal with known mean is an inverse gamma.**
+
+
+
+| |  0|  1|  2|  3|
+|:--:|--:|--:|--:|--:|
+|$\Sigma$    | NA           |  invW|  invW|  invW|
+|$\beta_x$   | $\Gamma(1,1)$|  $1/(2\sigma_x^2(1-\rho^2))$| $1/(2\sigma_x^2(1-\rho^2))$|$1/(2\sigma_x^2)$|
+|$\beta_y$   | $\Gamma(1,1)$|  $1/(2\sigma_y^2(1-\rho^2))$| $1/(2\sigma_y^2(1-\rho^2))$|$1/(2\sigma_y^2)$|
+|$\beta_{xy}$ | 0            |  $\rho/(\sigma_x\sigma_y(1-\rho^2))$|  0|  0|
+
+
+## Plots varying $\beta_i$
+
+```{r}
+iw <- 28
+ih <- 28
+betax <- sort(rinvgamma(4, 1, 0.5))
+betay <- sort(rinvgamma(4, 1, 0.5))
+
+p <- expand.grid(alpha = 1, 
+            betax = betax, 
+            betay = betay, 
+            f = 150, 
+            phi = 0, x0 = 0, y0 = 0, tau = 0)
+
+xg <- seq(-4,4, length = iw)
+xy <- expand.grid(xg, xg)
+
+pq <- list()
+
+for(i in 1:nrow(p)){
+  params <- c(p[i, ])
+  params$x <- xy[, 1]
+  params$y <- xy[, 2]
+
+  #print(as.matrix(params[-c(9,10)]))
+  G <- do.call(Gw, params)
+  d1 <- data.table(cbind(xy, G))
+
+  pq[[i]] <- ggplot(data = d1, aes(x = Var1, y = Var2, fill = G)) + 
+    geom_raster() + 
+    scale_fill_gradient2(low = "blue", mid = 'white', high = 'red') + 
+    guides(fill = FALSE) + theme_void()
+}
+
+do.call(grid.arrange, pq)
+```
+
+## Plots varying $f$ and $\phi$ with $beta_i = 0.35$
+
+
+```{r}
+iw <- 28
+ih <- 28
+f <- iw * seq(0.25, 10, length = 4)
+phi <- seq(0, 2 * pi, length = 4)
+
+p <- expand.grid(alpha = 1, 
+            betax = 0.35, 
+            betay = 0.35, 
+            f = f, 
+            phi = phi, x0 = 0, y0 = 0, tau = 0)
+
+xg <- seq(-4,4, length = iw)
+xy <- expand.grid(xg, xg)
+
+pq <- list()
+
+for(i in 1:nrow(p)){
+  params <- c(p[i, ])
+  params$x <- xy[, 1]
+  params$y <- xy[, 2]
+
+  #print(as.matrix(params[-c(9,10)]))
+  G <- do.call(Gw, params)
+  d1 <- data.table(cbind(xy, G))
+
+  pq[[i]] <- ggplot(data = d1, aes(x = Var1, y = Var2, fill = G)) + 
+    geom_raster() + 
+    scale_fill_gradient2(low = "blue", mid = 'white', high = 'red') + 
+    guides(fill = FALSE) + theme_void()
+}
+
+do.call(grid.arrange, pq)
+```
+
+## Plots varying $x_0$, $y_0$, and $\tau$
+
+```{r, fig.width = 10, fig.height = 10}
+iw <- 28
+ih <- 28
+
+x0 <- seq(-2,2, length = 4)
+y0 <- seq(2,-2, length = 4)
+tau <- seq(-pi, pi, length = 4)
+
+p <- expand.grid(alpha = 1, 
+            betax = 0.35, 
+            betay = 0.35, 
+            f = 5 * iw, 
+            phi = 0, x0 = x0, y0 = x0, tau = tau)
+
+xg <- seq(-4,4, length = iw)
+xy <- expand.grid(xg, xg)
+
+pq <- list()
+
+for(i in 1:nrow(p)){
+  params <- c(p[i, ])
+  params$x <- xy[, 1]
+  params$y <- xy[, 2]
+
+  #print(as.matrix(params[-c(9,10)]))
+  G <- do.call(Gw, params)
+  d1 <- data.table(cbind(xy, G))
+
+  pq[[i]] <- ggplot(data = d1, aes(x = Var1, y = Var2, fill = G)) + 
+    geom_raster() + 
+    scale_fill_gradient2(low = "blue", mid = 'white', high = 'red') + 
+    guides(fill = FALSE) + theme_minimal() + 
+    theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank())
+}
+
+do.call(grid.arrange, pq)
+```
+
+
+
+## Function code
+
+### Gabor filter weight function
+
+```{r GaborFunctionDef, echo = FALSE, results = 'markup'}
+Gw
+```
+
+### gabSamp function
+
+```{r gabSamp, echo = FALSE, results = 'markup'}
+gabSamp
+```
+
+
+### RandMatGabor 
+```{r, echo = FALSE, results = 'markup'}
+RandMatGabor
+```
+
+
+
+
+
+
+
+
+
+
+
+
+<!--
+#   Time:
+##  Working status:
+### Comments:
+####Soli Deo Gloria
+--> 
+
