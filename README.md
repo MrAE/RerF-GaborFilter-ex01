@@ -1,2 +1,3 @@
-# lumberjack-GaborFilter-ex01
-Adding Gabor Filter to RandMat Experiment 01
+# RerF-GaborFilter-ex01
+
+- [notebook exploring Gabor filter implementation](GaborFilter_01.html)
