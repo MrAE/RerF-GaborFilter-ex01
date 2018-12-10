@@ -4,6 +4,7 @@ author: "Jesse Leigh Patsolic"
 output: 
   html_document:
     keep_md: true
+    toc: true
     code_folding: show
     self_contained: true
 ---
@@ -58,7 +59,7 @@ this term is missing from the definition in Goodfellow et al.
 
 For reference the bivariate Gaussian is given by 
 
-$$ f(x,y; \mu_x, \mu_y, \sigma_x, \sigma_y, \rho) = \frac{1}{2\pi\sigma_x\sigma_y(1 - \rho^2)}\exp{\left\{-\frac{1}{2(1 - \rho^2)}\left[\frac{(x - \mu_x)^2}{\sigma_x^2} \color{blue}{- \frac{2\rho(x - \mu_x)(y - \mu_y)}{\sigma_x\sigma_y(1 - \rho^2)}}+ \frac{(y - \mu_y)^2}{\sigma_y^2} \right]\right\}} $$
+$$ f(x,y; \mu_x, \mu_y, \sigma_x, \sigma_y, \rho) = \frac{1}{2\pi\sigma_x\sigma_y(1 - \rho^2)}\exp{\left\{-\frac{1}{2(1 - \rho^2)}\left[\frac{(x - \mu_x)^2}{\sigma_x^2} \color{blue}{- \frac{2\rho(x - \mu_x)(y - \mu_y)}{\sigma_x\sigma_y}}+ \frac{(y - \mu_y)^2}{\sigma_y^2} \right]\right\}} $$
 
 **The conjugate prior for a uni-variate normal with known mean is an inverse gamma.**
 
@@ -66,7 +67,7 @@ $$ f(x,y; \mu_x, \mu_y, \sigma_x, \sigma_y, \rho) = \frac{1}{2\pi\sigma_x\sigma_
 
 | |  0|  1|  2|  3|
 |:--:|--:|--:|--:|--:|
-|$\Sigma$    | NA           |  invW|  invW|  1|
+|$\Sigma$    | NA           |  invW|  invW|  invW|
 |$\beta_x$   | $\Gamma(1,1)$|  $1/(2\sigma_x^2(1-\rho^2))$| ''|$1/(2\sigma_x^2)$|
 |$\beta_y$   | $\Gamma(1,1)$|  $1/(2\sigma_y^2(1-\rho^2))$| ''|$1/(2\sigma_y^2)$|
 |$\beta_{xy}$ | 0            |  $\rho/(\sigma_x\sigma_y(1-\rho^2))$|  0|  0|
@@ -501,7 +502,8 @@ predG3 <- Predict(Xtest, forestG3, num.cores = ncores)
 (errorG3 <- mean(predG3 != Ytest))
 ```
 
-## results
+# results
+
 ```{r, echo = FALSE, results = 'asis'}
 oe <- data.frame(
   cbind(
@@ -512,6 +514,14 @@ oe <- data.frame(
         ImagePatch = errorIP, Continuous = errorC))
 kable(oe[, order(oe[1, ])])
 ```
+
+
+| |  0|  1|  2|  3|
+|:--:|--:|--:|--:|--:|
+|$\Sigma$    | NA           |  invW|  invW|  invW|
+|$\beta_x$   | $\Gamma(1,1)$|  $1/(2\sigma_x^2(1-\rho^2))$| ''|$1/(2\sigma_x^2)$|
+|$\beta_y$   | $\Gamma(1,1)$|  $1/(2\sigma_y^2(1-\rho^2))$| ''|$1/(2\sigma_y^2)$|
+|$\beta_{xy}$ | 0            |  $\rho/(\sigma_x\sigma_y(1-\rho^2))$|  0|  0|
 
 
 
