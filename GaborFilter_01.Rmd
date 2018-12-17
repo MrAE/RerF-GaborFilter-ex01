@@ -46,6 +46,7 @@ require(data.table)
 require(gridExtra)
 require(rgl)
 data(mnist)
+source("RerF-gaborFilter01/R/RandMat.R")
 ```
 
 # Introduction 
@@ -74,140 +75,21 @@ $$ f(x,y; \mu_x, \mu_y, \sigma_x, \sigma_y, \rho) = \frac{1}{2\pi\sigma_x\sigma_
 
 
 
+### Gabor filter weight function
 
+```{r GaborFunctionDef, echo = FALSE, results = 'asis'}
+Gw
+```
 
-```{r GaborFunctionDef}
+### gabSamp function
 
-#' The 2-d Gabor weight function
-#'
-#' 
-#' @param x x coordinate 
-#' @param y y coordinate 
-#' @param alpha scaling factor of the Gaussian envelope
-#' @param betax \eqn{\beta_x} decay factor in the x direction
-#' @param betay \eqn{\beta_y} decay factor in the y direction
-#' @param f frequency of the cosine factor
-#' @param phi phase offset in the cosine factor
-#' @param x0 mean in the x direction
-#' @param y0 mean in the y direction
-#' @param tau the angle of rotation for x and y
-#'
-#' @return a weight in the form of a scaler.
-#'
-#' @export
-#' 
-#' @references @unpublished{Goodfellow-et-al-2016-Book,
-#'   title={Deep Learning},
-#'   author={Ian Goodfellow, Yoshua Bengio, and Aaron Courville},
-#'   note={Book in preparation for MIT Press},
-#'   url={http://www.deeplearningbook.org},
-#'   year={2016}
-#' }
-#'
-#' @examples
-#'
-#' p <- 28^2
-#' d <- 8
-#' ih <- iw <- 28
-#' pwMin <- 3
-#' pwMax <- 6
-#' paramList <- list(p = p, d = d, ih = ih, iw = iw, pwMin = pwMin, pwMax = pwMax)
-#' set.seed(8)
-#' (a <- do.call(RandMatImagePatch, paramList))
-
-Gw <- function(x, y, alpha, betax, betay, f, phi, x0, y0, tau, betaxy = 0) {
-
-  xp <-  (x - x0) * cos(tau) + (y - y0) * sin(tau)
-  yp <- -(x - x0) * sin(tau) + (y - y0) * cos(tau)
-
-  alpha * exp(- betax * xp^2 - betay * yp^2 + (betaxy * xp * yp)) * 
-    cos(f * xp + phi)
-}
-
-
-#' Sample the hyper-parameters for the Gabor weight function
-#'
-#' 
-#' @param n the number of samples
-#' @param galpha the shape parameter for alpha
-#' @param gbeta the shape parmeter for alpha
-#' @param igalpha the shape parameter for betax and betay
-#' @param igbeta the rate parameter for betax and betay
-#'
-#' @return a list of parameters for the Gabor Weight function.
-#'
-#' @export
-#' 
-#' @references @unpublished{Goodfellow-et-al-2016-Book,
-#'   title={Deep Learning},
-#'   author={Ian Goodfellow, Yoshua Bengio, and Aaron Courville},
-#'   note={Book in preparation for MIT Press},
-#'   url={http://www.deeplearningbook.org},
-#'   year={2016}
-#' }
-#'
-#' @examples
-#'
-#' params <- gabSamp()
-#' ##  must specify grid
-#' x <- seq(-4,4, length = 9)
-#' xy <- expand.grid(x,x)
-#' params$x <- xy[, 1]
-#' params$y <- xy[, 2]
-#' gw <- do.call(Gw, params)
-#' 
-#' 
-
-gabSamp <- function(n = 1, galpha = 3, gbeta = 1, igalpha = 0.5, igbeta = 0.5, w = 0) { 
-  out <- list()
-
-  out$alpha <- 1 # rgamma(n, shape = galpha, rate = gbeta)
-  out$betax <- rinvgamma(n, shape = igalpha, scale = igbeta)
-  out$betay <- rinvgamma(n, shape = igalpha, scale = igbeta)
-  out$f <- rgamma(n, shape = galpha, rate = gbeta)
-  out$phi <- runif(n, min = 0, max = 2 * pi)
-  out$x0 <- runif(n, min = -3.5, max = 3.5)#rnorm(n, mean = 0, sd = 0.75)
-  out$y0 <- runif(n, min = -3.5, max = 3.5)#rnorm(n, mean = 0, sd = 0.75)
-  out$tau <- runif(n, min = 0, max = 2 * pi)
-
-  if(w == 1){
-    # Letter B
-    S <- riwish(v = 2, S = diag(2))
-    sigx2 <- S[1]
-    sigy2 <- S[4]
-    rho <- S[2] / (sqrt(sigx2) * sqrt(sigy2))
-    out$betax <- 1 / (2 * sigx2  * (1 - rho^2))
-    out$betay <- 1 / (2 * sigy2  * (1 - rho^2))
-    out$betaxy <- rho / (sqrt(sigx2) * sqrt(sigy2) * (1 - rho^2))
-  }
-
-  if(w == 2){
-    # Letter C
-    S <- riwish(v = 2, S = diag(2))
-    sigx2 <- S[1]
-    sigy2 <- S[4]
-    rho <- S[2] / (sqrt(sigx2) * sqrt(sigy2))
-    out$betax <- 1 / (2 * sigx2  * (1 - rho^2))
-    out$betay <- 1 / (2 * sigy2  * (1 - rho^2))
-    out$betaxy <- 0
-  }
-
-  if(w == 3){
-    # letter D
-    S <- riwish(v = 2, S = diag(2))
-    sigx2 <- S[1]
-    sigy2 <- S[4]
-    out$betax <- 1 / (2 * sigx2)
-    out$betay <- 1 / (2 * sigy2)
-    out$betaxy <- 0
-  }
-
-  return(out)
-}
+```{r gabSamp, echo = FALSE, results = 'asis'}
+gabSamp
 ```
 
 
 ```{r param-test, eval = TRUE, include = FALSE}
+set.seed(1234)
 n <- 64
 w <- 28
 h <- 28
@@ -220,14 +102,14 @@ y <- xy[, 2]
 
 #params <- list()
 
-alpha <- 10
-betax <- sample(seq(0.01, 1,by = 0.1), 1)#rinvgamma(1, 1,0.75)
-betay <- sample(seq(0.01, 1,by=0.1), 1)#rinvgamma(1, 1, 0.75) 
-f <- rgamma(1, shape = 3, rate = 1)
-phi <- pi / 3
-x0 <- runif(1, -3,3)
-y0 <- runif(1, -3,3) 
-tau <- pi
+alpha <- 1
+betax <- rinvgamma(1, 1, 0.5)#sample(seq(0.01, 0.5,by=0.001), 1)#rinvgamma(1, 1,0.75)
+betay <- rinvgamma(1, 1, 0.5)#sample(seq(0.01, 0.5,by=0.001), 1)#rinvgamma(1, 1, 0.75) 
+f <- runif(1, min = iw / 8, max = 8 * iw)
+phi <- 0
+x0 <- 0#runif(1, -3,3)
+y0 <- 0#runif(1, -3,3) 
+tau <- 0
 
 #G1 <- do.call(w, params)
 
@@ -248,22 +130,21 @@ plot(pq)
 Given a random patch with height `h` and width `w` how do we sample a corresponding Gabor filter?
 
 ```{r check-looks-like-gabor}
-set.seed(12345)
+set.seed(32)
 # plots list
-p1 <- list()
-pm <- list()
+p0 <- list()
 im <- matrix(mnist$Xtrain[1,], 28, 28)
 ## Get a random subsample, 100 each of 3's and 5's
-set.seed(320)
-threes <- sample(which(mnist$Ytrain %in% 3), 100)
-fives  <- sample(which(mnist$Ytrain %in% 5), 100)
-numsub <- c(threes, fives)
-
-Ytrain <- mnist$Ytrain[numsub]
-Xtrain <- mnist$Xtrain[numsub,]
-Ytest <- mnist$Ytest[mnist$Ytest %in% c(3,5)]
-Xtest <- mnist$Xtest[mnist$Ytest %in% c(3,5),]
-X <- Xtrain[1, ]
+#set.seed(320)
+#threes <- sample(which(mnist$Ytrain %in% 3), 100)
+#fives  <- sample(which(mnist$Ytrain %in% 5), 100)
+#numsub <- c(threes, fives)
+#
+#Ytrain <- mnist$Ytrain[numsub]
+#Xtrain <- mnist$Xtrain[numsub,]
+#Ytest <- mnist$Ytest[mnist$Ytest %in% c(3,5)]
+#Xtest <- mnist$Xtest[mnist$Ytest %in% c(3,5),]
+#X <- Xtrain[1, ]
 #
 #for(i in sample(200)){
 #  X <- Xtrain[i,]
@@ -275,102 +156,37 @@ X <- Xtrain[1, ]
 
 w <- 28
 
-for(i in 1:36) {
+for(i in 1:25) {
   s  <- seq(-4, 4, length = w)
 
   xy <- expand.grid(s,s)
   
-  param <- gabSamp(w = 3)
+  param0 <- gabSamp(iw = 28)
 
-  param$x <- xy[, 1]
-  param$y <- xy[, 2]
+  param0$x <- xy[, 1]
+  param0$y <- xy[, 2]
 
-  G1 <- do.call(Gw, param)
-
-  d1 <- data.table(cbind(xy,G1, GX = G1 * X))
-
+  G0 <- do.call(Gw, param0)
+  d0 <- data.table(cbind(xy,G0, GX = G0 * X))
   
   #ggplot(data = d1, aes(x = Var1, y = Var2, fill = G1)) + geom_raster() + scale_fill_distiller(palette = "Spectral")
-  p1[[i]] <- ggplot(data = d1, aes(x = Var1, y = Var2, fill = G1)) + geom_raster() + scale_fill_gradient2(low = "blue", mid = 'white', high = 'red') + guides(fill = FALSE)
+  p0[[i]] <- ggplot(data = d0, aes(x = Var1, y = Var2, fill = G0)) + geom_raster() + scale_fill_gradient2(low = "blue", mid = 'white', high = 'red') + guides(fill = FALSE)
 
-  pm[[i]] <- ggplot(data = d1, aes(x = Var1, y = Var2, fill = GX)) + geom_raster() + scale_fill_gradient2(low = "blue", mid = 'white', high = 'red') + guides(fill = FALSE)
 }
 ```
 
 
 ```{r, fig.height = 8, fig.width = 8}
-do.call(grid.arrange, p1)  
+#pdf('tmp.pdf', height = 10, width = 10)
+print(do.call(grid.arrange, p0))
+#dev.off()
 ```
 
 
 ### R-RerF RandMatImageGabor
 
-```{r RandMatGabor-Def}
-
-#' Create a Random Matrix: For an Image with Gabor weighting
-#' 
-#' The pathces are specified to be square, because the Gabor filter
-#' takes care of the "squishing".
-#' Also the minimum patch size should be 3x3.
-#'
-#' @param p the number of dimensions.
-#' @param d the number of desired columns in the projection matrix.
-#' @param ih the height (px) of the image.
-#' @param iw the width (px) of the image.
-#' @param pwMin the minimum patch size to sample.
-#' @param pwMax the maximum patch size to sample.
-#' @param ... used to handle superfluous arguments passed in using paramList.
-#'
-#' @return A random matrix to use in running \code{\link{RerF}}.
-#'
-#' @export
-#'
-#' @examples
-#'
-#' ih <- iw <- 28
-#' p <- 28^2
-#' d <- 28
-#' paramList <- list(p = p, d = d, ih = ih, iw = iw)
-#' set.seed(8)
-#' (a <- do.call(RandMatImageGabor, paramList))
-#' for(i in 1:d){
-#'   plot(raster::raster(matrix(a[a[, 2] == i,][, 3L] , 28, 28)))
-#'   Sys.sleep(0.6)
-#' }
-#' 
-
-RandMatImageGabor <- function(p, d, ih, iw, tol = .Machine$double.eps, whG = 0, ...) {
-
-  ## Sample Gabor Filter
-  gx <-  seq(-2.5, 2.5, length = iw) 
-  gy <-  seq(2.5, -2.5, length = ih)
-  gridXY <- expand.grid(gx, gy)
-  gaborBank <- list()
-  for(i in 1:d){
-    params <- gabSamp(w = whG) ## 3 = letter c
-    params$x <- gridXY[, 1]
-    params$y <- gridXY[, 2]
-    gaborBank[[i]] <- do.call(Gw, params)
-    #if(DEBUG){
-    #  plot(raster::raster(matrix(gaborBank[[i]], 28, 28)))
-    #  Sys.sleep(1)
-    #}
-  }
-
-#plot(raster::raster(matrix(X, 28, 28))) 
-#plot(raster::raster(matrix(G1, 28, 28))) 
-#plot(raster::raster(matrix(X * G1, 28, 28))) 
-
-  nz.rows <- rep(1:p, d)
-  nz.cols <- rep(1:d, each = p)
-
-  w <- Reduce('c', gaborBank)
-  w[w <= tol & w >= -tol] <- 0 ## NOTE: This is not efficient
-
-  ## remove w within delta ball of zero to save space
-  random.matrix <- 
-    as.matrix(cbind(nz.rows = nz.rows, nz.cols = nz.cols, w = w))[w != 0, ]
-}
+```{r RandMatGabor-Def, echo = FALSE, results='asis'}
+RandMatGabor
 ```
 
 ```{r mnist-sub}
@@ -411,13 +227,12 @@ patch.max <- 10L
 ntrees <- 500L
 ncores <- 7L
 seed1 <- 1L
-
 ```
 
 ### Parameters
 
 ```{r, results = 'asis'}
-kable(as.data.frame((params <- list(p = p, d = d, iw = iw, ih = ih, pwMin = patch.min, pwMax = patch.max, sparsity = 1, whG = 1))))
+kable(as.data.frame((params <- list(p = p, d = d, iw = iw, ih = ih, pwMin = patch.min, pwMax = patch.max, sparsity = 1))))
 ```
 
 
@@ -457,7 +272,6 @@ predC <- Predict(Xtest, forestC, num.cores = ncores)
 
 ```{r RerF-Gabor}
 #params <- list(p = p, d = d, iw = 28, ih = 28)
-params$whG <- 0
 system.time({
 forestG0 <- RerF(Xtrain, Ytrain,  FUN = RandMatImageGabor,
                paramList = params,
@@ -467,39 +281,6 @@ forestG0 <- RerF(Xtrain, Ytrain,  FUN = RandMatImageGabor,
 
 predG0 <- Predict(Xtest, forestG0, num.cores = ncores)
 (errorG0 <- mean(predG0 != Ytest))
-
-params$whG <- 1
-system.time({
-forestG1 <- RerF(Xtrain, Ytrain,  FUN = RandMatImageGabor,
-               paramList = params,
-               trees = ntrees,
-               num.cores = ncores, seed = seed1)
-})
-
-predG1 <- Predict(Xtest, forestG1, num.cores = ncores)
-(errorG1 <- mean(predG1 != Ytest))
-
-params$whG <- 2
-system.time({
-forestG2 <- RerF(Xtrain, Ytrain,  FUN = RandMatImageGabor,
-               paramList = params,
-               trees = ntrees,
-               num.cores = ncores, seed = seed1)
-})
-
-predG2 <- Predict(Xtest, forestG2, num.cores = ncores)
-(errorG2 <- mean(predG2 != Ytest))
-
-params$whG <- 3
-system.time({
-forestG3 <- RerF(Xtrain, Ytrain,  FUN = RandMatImageGabor,
-               paramList = params,
-               trees = ntrees,
-               num.cores = ncores, seed = seed1)
-})
-
-predG3 <- Predict(Xtest, forestG3, num.cores = ncores)
-(errorG3 <- mean(predG3 != Ytest))
 ```
 
 # results
@@ -508,21 +289,9 @@ predG3 <- Predict(Xtest, forestG3, num.cores = ncores)
 oe <- data.frame(
   cbind(
         Gabor0 = errorG0, 
-        Gabor1 = errorG1, 
-        Gabor2 = errorG2, 
-        Gabor3 = errorG3, 
         ImagePatch = errorIP, Continuous = errorC))
 kable(oe[, order(oe[1, ])])
 ```
-
-
-| |  0|  1|  2|  3|
-|:--:|--:|--:|--:|--:|
-|$\Sigma$    | NA           |  invW|  invW|  invW|
-|$\beta_x$   | $\Gamma(1,1)$|  $1/(2\sigma_x^2(1-\rho^2))$| ''|$1/(2\sigma_x^2)$|
-|$\beta_y$   | $\Gamma(1,1)$|  $1/(2\sigma_y^2(1-\rho^2))$| ''|$1/(2\sigma_y^2)$|
-|$\beta_{xy}$ | 0            |  $\rho/(\sigma_x\sigma_y(1-\rho^2))$|  0|  0|
-
 
 
 

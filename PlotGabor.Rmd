@@ -117,8 +117,8 @@ do.call(grid.arrange, pq)
 ```{r}
 iw <- 28
 ih <- 28
-f <- iw * seq(0.25, 10, length = 4)
-phi <- seq(0, 2 * pi, length = 4)
+f <- runif(16, min = floor(iw/2), max = 10 * iw)#iw * seq(0.25, 10, length = 4)
+phi <- 0#seq(0, 2 * pi, length = 4)
 
 p <- expand.grid(alpha = 1, 
             betax = 0.35, 
