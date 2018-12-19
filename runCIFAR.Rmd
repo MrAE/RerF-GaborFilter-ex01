@@ -27,7 +27,6 @@ require(knitr)
 knitr::opts_chunk$set(cache=FALSE, autodep=TRUE, eval = TRUE)
 
 rmarkdown::render("runCIFAR.Rmd")
-#system('open runCIFAR.html')
 ```
 
 <style type="text/css">
@@ -52,14 +51,13 @@ require(devtools)
 devtools::install_github("neurodata/r-rerf", ref = "jlp-gaborFilter01")
 require(rerf)
 
-
 print("loading data ...")
 
 data(mnist)
 load("~/data/cifar100.RData")
 
-fi <- file("RerF-gaborFilter01/R/RandMat.R", "r")
-source(textConnection(readLines(fi)[674:831])) # Source only the new RandMatGabor function
+fi <- file("R-RerF-jlp-gaborFilter01/R/RandMat.R", "r")
+source(textConnection(readLines(fi)[674:838])) # Source only the new RandMatGabor function
 close(fi); rm(fi)
 ```
 
@@ -148,6 +146,7 @@ errIND <- which(predC != Ytest)
 
 par(bg=NA,mar=c(0,0,0,0),oma=c(0,0,0,0))
 par(mfrow = c(ceiling(length(errIND)/3),3))
+
 for(i in errIND) {
   im <- aperm(array(Xtrain[i, ], dim = c(32, 32)))
   plot(as.raster(im, max = 1))
@@ -160,7 +159,7 @@ system.time({
 forestG <- RerF(Xtrain, as.numeric(as.factor(Ytrain)),  FUN = RandMatGabor, 
                paramList = params,
                trees = ntrees,
-               num.cores = 1L, seed = seed1)
+               num.cores = ncores, seed = seed1)
 })
 
 predG <- Predict(Xtest, forestG, num.cores = 1L)
