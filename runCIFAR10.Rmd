@@ -1,5 +1,5 @@
 ---
-title: "Run CIFAR"
+title: "Run CIFAR10"
 author: "Jesse Leigh Patsolic"
 output: 
   html_document:
@@ -29,10 +29,10 @@ slackrSetup(config_file = '~/neurodata-slackr.conf')
 require(rmarkdown)
 require(knitr); knitr::opts_chunk$set(cache=FALSE, autodep=TRUE, eval = TRUE)
 
-msg0 <- paste("Synaptomes1 has started running cifar100 at", Sys.time())
+msg0 <- paste("Synaptomes1 has started running cifar10 at", Sys.time())
 slackr_msg(msg0)
 
-rmarkdown::render("runCIFAR.Rmd")
+rmarkdown::render("runCIFAR10.Rmd")
 ```
 
 <style type="text/css">
@@ -54,13 +54,14 @@ require(data.table)
 require(gridExtra)
 
 require(devtools)
-devtools::install_github("neurodata/r-rerf", ref = "jlp-gaborFilter01")
+if(version$os == "linux-gnu"){
+  devtools::install_github("neurodata/r-rerf", ref = "jlp-gaborFilter01")
+}
 require(rerf)
 
 print("loading data ...")
 
-data(mnist)
-load("~/data/cifar100.RData")
+load("~/data/cifar10.RData")
 
 fi <- file("R-RerF-jlp-gaborFilter01/R/RandMat.R", "r")
 source(textConnection(readLines(fi)[674:838])) # Source only the new RandMatGabor function
@@ -68,24 +69,21 @@ close(fi); rm(fi)
 ```
 
 
-# Subset CIFAR
+# CIFAR10
 
-```{r get-subset}
-names(cifar100)
-(u <- sort(unique(cifar100$YtrainFine)))
-Ysub <- u[c(1,25,90)]
-Ysub <- u[c(1:10)]
+```{r getCIFAR}
+names(cifar10)
+(u <- sort(unique(cifar10$Ytrain)))
 
+Batch <- cifar10$Batch
+ind <- 1:length(Batch) #sample(which(Batch == 1), 500L)
 
-train.ind <- which(cifar100$YtrainFine %in% Ysub)
-test.ind <- which(cifar100$YtestFine %in% Ysub)
+X <- cifar10$Xtrain[ind, ]
+Xtrain <- cifar10$XtrainGray[ind,]
+Xtest <- cifar10$XtestGray
 
-Ytrain <- cifar100$YtrainFine[train.ind]
-Ytest <- cifar100$YtestFine[test.ind]
-
-X <- cifar100$Xtrain[train.ind, ]
-Xtrain <- cifar100$XtrainGray[train.ind, ]
-Xtest <- cifar100$XtestGray[test.ind, ]
+Ytrain <- cifar10$Ytrain[ind]
+Ytest <- cifar10$Ytest
 ```
 
 ## Look At It color and gray-scale
@@ -138,19 +136,19 @@ kable(as.data.frame((params <- list(p = p, d = d, iw = iw, ih = ih, pwMin = patc
 system.time({
 forestC <- RerF(Xtrain, as.factor(Ytrain),  FUN = RandMatContinuous, 
                paramList = params,
-               trees = 2*ntrees, store.oob = TRUE,
+               trees = ntrees, store.oob = TRUE,
                num.cores = ncores, seed = seed1)
 })
 
-predC <- Predict(Xtest, forestC, num.cores = 1L)
-oobC <- OOBPredict(Xtrain, forestC, num.cores = 1L)
+predC <- Predict(Xtest, forestC, num.cores = ncores)
+oobC <- OOBPredict(Xtrain, forestC, num.cores = ncores)
 (ooberC <- mean(oobC != Ytrain))
 (errorC <- mean(predC != Ytest))
 ```
 
 #### Plots of errors
 
-```{r pC}
+```{r pC, eval = FALSE}
 errIND <- which(predC != Ytest)
 
 par(bg=NA,mar=c(0,0,0,0),oma=c(0,0,0,0))
@@ -171,15 +169,15 @@ forestG <- RerF(Xtrain, as.numeric(as.factor(Ytrain)),  FUN = RandMatGabor,
                num.cores = ncores, seed = seed1)
 })
 
-predG <- Predict(Xtest, forestG, num.cores = 1L)
-oobG <- OOBPredict(Xtrain, forestG, num.cores = 1L)
+predG <- Predict(Xtest, forestG, num.cores = ncores)
+oobG <- OOBPredict(Xtrain, forestG, num.cores = ncores)
 (ooberG <- mean(oobG != Ytrain))
 (errorG <- mean(predG != as.numeric(as.factor(Ytest))))
 ```
 
 #### Plots of errors
 
-```{r pg}
+```{r pg, eval = FALSE}
 errIND <- which(predG != as.numeric(as.factor(Ytest)))
 
 par(bg=NA,mar=c(0,0,0,0),oma=c(0,0,0,0))
@@ -200,15 +198,15 @@ forestIp <- RerF(Xtrain, as.numeric(as.factor(Ytrain)),  FUN = RandMatImagePatch
                num.cores = ncores, seed = seed1)
 })
 
-predIp <- Predict(Xtest, forestIp, num.cores = 1L)
-oobIp <- OOBPredict(Xtrain, forestIp, num.cores = 1L)
+predIp <- Predict(Xtest, forestIp, num.cores = ncores)
+oobIp <- OOBPredict(Xtrain, forestIp, num.cores = ncores)
 (ooberIp <- mean(oobIp != Ytrain))
 (errorIp <- mean(predIp != as.numeric(as.factor(Ytest))))
 ```
 
 #### Plots of errors
 
-```{r pip}
+```{r pip, eval = FALSE}
 errIND <- which(predIp != as.numeric(as.factor(Ytest)))
 
 par(bg=NA,mar=c(0,0,0,0),oma=c(0,0,0,0))
@@ -223,11 +221,10 @@ for(i in errIND) {
 
 ```{r notify, echo = FALSE}
 msg <- 
-  paste("Synaptomes1 has finished the cifar100 run at", Sys.time())
+  paste("Synaptomes1 has finished the run at", Sys.time())
 slackr_msg(msg)
-save.image(file = paste0("syn1_cifar100", format(Sys.time(), "%Y%m%dT%H%M%S"), ".RData"))
+save.image(file = paste0("syn1_cifar10", format(Sys.time(), "%Y%m%dT%H%M%S"), ".RData"))
 ```
-
 
 <!--
 #   Time:
